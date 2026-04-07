@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LATAMATCH — E-Dating VALORANT LATAM</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+<!-- ════════════════════════════════════════════
+  🔥 FIREBASE SETUP — REEMPLAZÁ ESTOS VALORES
+  
+  1. Andá a https://console.firebase.google.com
+  2. Creá un proyecto nuevo (ej: "latamatch")
+  3. Agregá una Web App (</> icono)
+  4. Copiá los valores de firebaseConfig y pegálos acá abajo
+  5. En Firebase Console → Authentication → Sign-in method → Email/Password → Habilitar
+  6. En Firebase Console → Firestore Database → Crear base de datos → Modo producción
+  7. En Firestore → Reglas, pegá:
+  
+     rules_version = '2';
+     service cloud.firestore.rules {
+       match /databases/{database}/documents {
+         match /users/{userId} {
+           allow read: if request.auth != null;
+           allow write: if request.auth != null && request.auth.uid == userId;
+         }
+         match /requests/{reqId} {
+           allow read: if request.auth != null &&
+             (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+           allow create: if request.auth != null && request.resource.data.from == request.auth.uid;
+           allow update: if request.auth != null &&
+             (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+           allow delete: if request.auth != null &&
+             (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+         }
+       }
+     }
+════════════════════════════════════════════ -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, deleteDoc, onSnapshot, serverTimestamp, orderBy, limit }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref, uploadString, getDownloadURL }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js"; // Import Analytics if you intend to use it
+
+  // ⬇️ TU CONFIGURACIÓN DE FIREBASE ⬇️
+  const firebaseConfig = {
+    apiKey: "AIzaSyC0yw7ltdQp_QvIvymwEkbG3yNNreUz1yc",
+    authDomain: "latamatch.firebaseapp.com",
+    projectId: "latamatch",
+    storageBucket: "latamatch.firebasestorage.app",
+    messagingSenderId: "684259798123",
+    appId: "1:684259798123:web:161fadce62ceadedff152e",
+    measurementId: "G-G8ZK4XJ1SN" // Incluido si planeas usar Google Analytics
+  };
+  // ⬆️ FIN CONFIGURACIÓN ⬆️
+
+  let app, auth, db, storage, analytics; // Agregado 'analytics'
+  let firebaseReady = false;
+
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+    analytics = getAnalytics(app); // Inicializado Analytics
+    firebaseReady = true; // Si llega hasta aquí, se considera listo.
+
+    window._fb = {
+      app, // Agregado el objeto app
+      auth, db, storage, analytics, firebaseReady, // Agregado analytics
+      createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+      doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, deleteDoc, onSnapshot, serverTimestamp, orderBy, limit, ref, uploadString, getDownloadURL
+    };
+  } catch(e) {
+    console.error("Error initializing Firebase:", e); // Añadido para mejor depuración
+    window._fb = { firebaseReady: false };
+  }
+
+  window.dispatchEvent(new Event('fb-ready'));
+</script>
+
+<style>
+:root{
+  --red:#FF4655;--red2:#cc2233;--white:#ECE8E1;--off:#b8b3aa;
+  --dark:#0F1923;--darker:#070c12;--mid:#182331;--mid2:#1e2d3f;
+  --green:#4DFFB4;--gold:#F5A524;--gray:#4a5568;--gray2:#2d3748;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--dark);color:var(--white);font-family:'Rajdhani',sans-serif;overflow-x:hidden;min-height:100vh;}
+
+/* noise */
+body::after{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%230F1923'/%3E%3Ccircle cx='1' cy='1' r='0.5' fill='%23ffffff07'/%3E%3C/svg%3E");pointer-events:none;z-index:0;}
+
+/* views */
+.view{display:none;min-height:100vh;position:relative;z-index:1;}
+.view.active{display:flex;flex-direction:column;}
+
+/* nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:600;height:58px;background:rgba(7,12,18,.97);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,70,85,.18);display:flex;align-items:center;justify-content:space-between;padding:0 28px;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:5px;color:var(--white);cursor:pointer;display:flex;align-items:center;gap:6px;text-decoration:none;}
+.logo em{color:var(--red);font-style:normal;}
+.logo-beta{font-family:'Share Tech Mono',monospace;font-size:8px;background:var(--red);color:var(--dark);padding:2px 5px;margin-top:-12px;letter-spacing:1px;}
+.nav-r{display:flex;align-items:center;gap:6px;}
+.nav-disc{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);letter-spacing:1px;margin-right:10px;display:none;}
+@media(min-width:640px){.nav-disc{display:block;}}
+
+/* btns */
+.btn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;padding:9px 22px;cursor:pointer;border:none;transition:all .15s;clip-path:polygon(7px 0,100% 0,calc(100% - 7px) 100%,0 100%);}
+.btn-ghost{background:transparent;color:var(--white);border:1px solid rgba(236,232,225,.22);}
+.btn-ghost:hover{border-color:var(--white);background:rgba(255,255,255,.05);}
+.btn-red{background:var(--red);color:var(--dark);}
+.btn-red:hover{background:#ff5f6d;transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,70,85,.35);}
+.btn-red:disabled{background:var(--gray2);color:var(--gray);cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-green{background:var(--green);color:var(--dark);}
+.btn-green:hover{background:#6fffbf;}
+.btn-outline-red{background:transparent;color:var(--red);border:1px solid rgba(255,70,85,.5);}
+.btn-outline-red:hover{background:rgba(255,70,85,.1);}
+.btn-lg{padding:14px 38px;font-size:15px;}
+.btn-sm{padding:6px 14px;font-size:11px;}
+.btn-xs{padding:4px 10px;font-size:10px;}
+.btn-full{width:100%;padding:13px;}
+.hidden{display:none!important;}
+
+/* forms */
+.auth-box{background:var(--mid);width:100%;max-width:480px;padding:40px 36px;position:relative;border-top:2px solid var(--red);}
+.auth-box::after{content:'';position:absolute;bottom:-50px;right:-50px;width:160px;height:160px;background:radial-gradient(circle,rgba(255,70,85,.09) 0%,transparent 70%);pointer-events:none;}
+.auth-title{font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:2px;margin-bottom:4px;}
+.auth-sub{font-size:14px;color:var(--off);margin-bottom:24px;}
+.field{margin-bottom:16px;}
+.field label{display:block;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--off);text-transform:uppercase;margin-bottom:6px;}
+.field input,.field select,.field textarea{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);color:var(--white);font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:500;padding:11px 14px;outline:none;transition:border .15s;border-radius:0;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--red);}
+.field select option{background:var(--darker);}
+.field textarea{resize:vertical;min-height:80px;line-height:1.5;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.err{background:rgba(255,70,85,.12);border:1px solid rgba(255,70,85,.3);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:11px;padding:10px 14px;margin-bottom:14px;letter-spacing:1px;display:none;}
+.auth-switch{font-size:14px;color:var(--off);margin-top:14px;text-align:center;}
+.auth-switch a{color:var(--red);cursor:pointer;}
+.auth-switch a:hover{text-decoration:underline;}
+.step-bar{display:flex;gap:5px;margin-bottom:24px;}
+.step-seg{height:3px;flex:1;background:rgba(255,255,255,.1);transition:background .3s;}
+.step-seg.done{background:var(--red);}
+.step-seg.cur{background:rgba(255,70,85,.45);}
+
+/* avatar upload */
+.av-upload{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+.av-prev{width:70px;height:70px;border-radius:50%;background:var(--gray2);border:2px solid rgba(255,70,85,.3);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden;flex-shrink:0;}
+.av-prev img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.av-lbl{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;color:var(--red);border:1px dashed rgba(255,70,85,.4);padding:8px 14px;cursor:pointer;display:inline-block;transition:.15s;}
+.av-lbl:hover{background:rgba(255,70,85,.08);}
+
+/* ── firebase setup banner ── */
+.fb-banner{background:rgba(245,165,36,.1);border:1px solid rgba(245,165,36,.3);padding:16px 20px;margin:0;display:flex;gap:12px;align-items:flex-start;}
+.fb-banner-icon{font-size:20px;flex-shrink:0;margin-top:2px;}
+.fb-banner-text{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--gold);line-height:1.7;letter-spacing:.5px;}
+.fb-banner-text strong{color:var(--white);}
+.fb-banner-text a{color:var(--gold);text-decoration:underline;}
+
+/* ── app shell ── */
+#view-app{display:none;flex-direction:column;}
+#view-app.active{display:flex;}
+.app-tabs{position:fixed;bottom:0;left:0;right:0;z-index:600;height:62px;background:rgba(7,12,18,.97);border-top:1px solid rgba(255,70,85,.15);display:flex;}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;border:none;background:transparent;color:var(--gray);font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;transition:color .15s;position:relative;}
+.tab.active{color:var(--red);}
+.tab .ti{font-size:22px;line-height:1;}
+.tab-badge{position:absolute;top:8px;right:calc(50% - 18px);background:var(--red);color:var(--white);font-family:'Share Tech Mono',monospace;font-size:8px;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;}
+.tab-badge.on{display:flex;}
+.page{display:none;flex:1;overflow-y:auto;padding-top:66px;padding-bottom:70px;}
+.page.active{display:block;}
+.page-inner{max-width:520px;margin:0 auto;padding:16px;}
+
+/* ── FILTER DRAWER ── */
+.filter-overlay{position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:none;align-items:flex-end;}
+.filter-overlay.open{display:flex;}
+.filter-drawer{background:var(--mid);width:100%;max-width:520px;margin:0 auto;padding:24px 20px 32px;border-top:2px solid var(--red);max-height:85vh;overflow-y:auto;position:relative;}
+.drawer-handle{width:36px;height:3px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 20px;}
+.drawer-title{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
+.filter-section{margin-bottom:18px;}
+.filter-label{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.filter-label::before{content:'//';opacity:.4;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;padding:6px 12px;border:1px solid rgba(255,255,255,.12);color:var(--off);cursor:pointer;transition:.15s;text-transform:uppercase;user-select:none;}
+.chip:hover{border-color:rgba(255,70,85,.5);color:var(--white);}
+.chip.sel{border-color:var(--red);color:var(--white);background:rgba(255,70,85,.12);}
+.chip.sel-green{border-color:var(--green);color:var(--green);background:rgba(77,255,180,.08);}
+.filter-actions{display:flex;gap:8px;margin-top:20px;}
+
+/* ── SWIPE ── */
+#page-swipe{display:none;flex-direction:column;align-items:center;padding:66px 12px 72px;}
+#page-swipe.active{display:flex;}
+.swipe-topbar{width:100%;max-width:400px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.swipe-title{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;}
+.filter-btn{background:rgba(255,70,85,.1);border:1px solid rgba(255,70,85,.3);color:var(--red);padding:8px 14px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;display:flex;align-items:center;gap:6px;transition:.15s;}
+.filter-btn:hover{background:rgba(255,70,85,.2);}
+.filter-active-chips{display:flex;flex-wrap:wrap;gap:4px;max-width:400px;width:100%;margin-bottom:10px;min-height:20px;}
+.fac{font-family:'Share Tech Mono',monospace;font-size:9px;background:rgba(255,70,85,.12);border:1px solid rgba(255,70,85,.25);color:var(--red);padding:3px 8px;letter-spacing:1px;display:flex;align-items:center;gap:4px;cursor:pointer;}
+.fac:hover{background:rgba(255,70,85,.2);}
+
+/* card stack */
+.card-stack{position:relative;width:100%;max-width:390px;height:570px;}
+.swipe-card{position:absolute;inset:0;background:var(--mid);overflow:hidden;cursor:grab;user-select:none;box-shadow:0 20px 60px rgba(0,0,0,.55);transition:box-shadow .2s;}
+.swipe-card:active{cursor:grabbing;}
+.swipe-card.back{transform:scale(.94) translateY(14px);z-index:0;pointer-events:none;}
+.swipe-card.front{z-index:2;}
+.card-img{width:100%;height:310px;background:var(--gray2);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;flex-shrink:0;}
+.card-img img{width:100%;height:100%;object-fit:cover;}
+.card-img-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:64px;background:linear-gradient(135deg,var(--gray2) 0%,var(--darker) 100%);}
+.card-lbl{position:absolute;font-family:'Bebas Neue',sans-serif;font-size:40px;letter-spacing:3px;padding:4px 14px;opacity:0;transition:opacity .1s;top:20px;}
+.card-lbl-like{left:16px;color:var(--green);border:3px solid var(--green);transform:rotate(-14deg);}
+.card-lbl-nope{right:16px;color:var(--red);border:3px solid var(--red);transform:rotate(14deg);}
+.card-body{padding:16px 18px 14px;overflow:hidden;}
+.card-name-row{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;}
+.card-name{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-age{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--off);flex-shrink:0;}
+.card-tag{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--red);margin-bottom:8px;}
+.badges{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px;}
+.badge{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;padding:3px 7px;text-transform:uppercase;}
+.b-rank{background:rgba(245,165,36,.1);color:var(--gold);border:1px solid rgba(245,165,36,.22);}
+.b-role{background:rgba(77,255,180,.08);color:var(--green);border:1px solid rgba(77,255,180,.18);}
+.b-country{background:rgba(255,70,85,.08);color:var(--red);border:1px solid rgba(255,70,85,.18);}
+.b-agent{background:rgba(255,255,255,.04);color:var(--off);border:1px solid rgba(255,255,255,.1);}
+.b-gender{background:rgba(77,255,180,.06);color:var(--green);border:1px solid rgba(77,255,180,.14);}
+.card-bio{font-size:13px;color:var(--off);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.card-yt{margin:0 18px 12px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.06);overflow:hidden;}
+.card-yt iframe{width:100%;height:155px;border:none;display:block;}
+
+/* swipe actions */
+.swipe-btns{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:18px;}
+.sbt{border:none;cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:22px;}
+.sbt-nope{width:60px;height:60px;background:rgba(255,70,85,.12);border:2px solid rgba(255,70,85,.3);color:var(--red);}
+.sbt-nope:hover{background:var(--red);color:var(--dark);transform:scale(1.08);}
+.sbt-like{width:60px;height:60px;background:rgba(77,255,180,.1);border:2px solid rgba(77,255,180,.25);color:var(--green);}
+.sbt-like:hover{background:var(--green);color:var(--dark);transform:scale(1.08);}
+.sbt-super{width:48px;height:48px;background:rgba(245,165,36,.1);border:2px solid rgba(245,165,36,.22);color:var(--gold);font-size:18px;}
+.sbt-super:hover{background:var(--gold);color:var(--dark);}
+.swipe-hint{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);letter-spacing:2px;text-align:center;margin-top:10px;}
+.no-profiles{text-align:center;padding:40px 20px;}
+.np-icon{font-size:48px;margin-bottom:14px;}
+.np-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:var(--off);}
+.np-sub{font-size:14px;color:var(--gray);margin-top:8px;line-height:1.5;}
+
+/* ── REQUESTS ── */
+.req-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:16px;}
+.rt{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;padding:10px 16px;cursor:pointer;color:var(--gray);border-bottom:2px solid transparent;transition:.15s;position:relative;bottom:-1px;white-space:nowrap;}
+.rt.active{color:var(--red);border-bottom-color:var(--red);}
+.req-card{background:var(--mid);padding:15px 18px;display:flex;align-items:center;gap:12px;margin-bottom:2px;position:relative;overflow:hidden;transition:background .15s;}
+.req-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--red);}
+.req-card.match::before{background:var(--green);}
+.req-card:hover{background:var(--mid2);}
+.req-av{width:48px;height:48px;border-radius:50%;background:var(--gray2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;overflow:hidden;}
+.req-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.req-info{flex:1;min-width:0;}
+.req-name{font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;}
+.req-meta{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--off);margin-top:2px;}
+.req-msg{font-size:13px;color:var(--gray);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.req-acts{display:flex;gap:5px;flex-shrink:0;}
+.empty{text-align:center;padding:50px 20px;}
+.empty-i{font-size:36px;margin-bottom:10px;}
+.empty-t{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--gray);letter-spacing:2px;}
+
+/* ── PROFILE ── */
+.prof-header{background:var(--mid);padding:24px;margin-bottom:2px;position:relative;overflow:hidden;}
+.prof-header::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);}
+.prof-top{display:flex;gap:16px;align-items:flex-start;}
+.my-av{width:84px;height:84px;border-radius:50%;background:var(--gray2);border:2px solid rgba(255,70,85,.3);display:flex;align-items:center;justify-content:center;font-size:34px;flex-shrink:0;overflow:hidden;cursor:pointer;position:relative;}
+.my-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.my-av:hover::after{content:'📷';position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:22px;border-radius:50%;}
+.prof-sec{background:var(--mid);padding:18px 20px;margin-bottom:2px;}
+.prof-sec-title{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--red);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.prof-sec-title::before{content:'//';opacity:.4;}
+.prof-edit-btn{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--off);border:1px solid rgba(255,255,255,.1);padding:5px 10px;cursor:pointer;background:transparent;margin-left:auto;transition:.15s;}
+.prof-edit-btn:hover{border-color:var(--red);color:var(--red);}
+.pfd{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+.pfd:last-child{border-bottom:none;}
+.pfd-lbl{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--gray);letter-spacing:1px;text-transform:uppercase;}
+.pfd-val{font-size:15px;font-weight:600;}
+.yt-wrap{margin-top:12px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.06);overflow:hidden;}
+.yt-wrap iframe{width:100%;height:195px;border:none;display:block;}
+.logout-btn{width:100%;padding:13px;background:rgba(255,70,85,.08);border:1px solid rgba(255,70,85,.18);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;cursor:pointer;transition:.15s;margin-top:10px;}
+.logout-btn:hover{background:rgba(255,70,85,.18);}
+
+/* ── EDIT MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:800;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(5px);}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--mid);width:100%;max-width:460px;max-height:85vh;overflow-y:auto;padding:26px 24px;position:relative;border-top:2px solid var(--red);}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;margin-bottom:18px;}
+.modal-close{position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--off);font-size:20px;cursor:pointer;line-height:1;transition:color .15s;}
+.modal-close:hover{color:var(--red);}
+
+/* ── MATCH POPUP ── */
+.match-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:900;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);}
+.match-overlay.open{display:flex;}
+.match-box{background:var(--mid);padding:36px 28px;text-align:center;max-width:340px;width:100%;position:relative;animation:popIn .3s ease;}
+.match-box::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red),var(--gold),var(--green));}
+.match-title{font-family:'Bebas Neue',sans-serif;font-size:56px;letter-spacing:3px;background:linear-gradient(135deg,var(--red),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1;}
+.match-avs{display:flex;align-items:center;justify-content:center;margin:16px 0;}
+.match-av{width:68px;height:68px;border-radius:50%;background:var(--gray2);border:3px solid var(--red);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden;}
+.match-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.match-av+.match-av{margin-left:-10px;border-color:var(--gold);}
+.match-heart{font-size:26px;z-index:1;margin:0 -4px;}
+.match-sub{font-size:14px;color:var(--off);margin:8px 0 20px;line-height:1.5;}
+.match-acts{display:flex;gap:8px;justify-content:center;}
+
+/* ── LOADING ── */
+.loading-screen{position:fixed;inset:0;background:var(--darker);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.loading-logo{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;}
+.loading-logo em{color:var(--red);font-style:normal;}
+.loading-bar{width:200px;height:2px;background:rgba(255,255,255,.08);overflow:hidden;}
+.loading-bar-fill{height:100%;background:var(--red);animation:loadBar 1.5s ease-in-out infinite;}
+.loading-txt{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--gray);letter-spacing:3px;}
+
+/* ── SPINNER ── */
+.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+
+/* ── TICKER ── */
+.ticker{height:34px;background:var(--red);overflow:hidden;display:flex;align-items:center;}
+.tick-track{display:flex;animation:tick 30s linear infinite;white-space:nowrap;}
+.tick-item{font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--dark);padding:0 26px;font-weight:700;}
+.tick-item::after{content:'◆';margin-left:26px;opacity:.4;}
+
+/* ── LANDING ── */
+.landing-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow:hidden;position:relative;}
+.l-glow{position:absolute;bottom:-15%;left:50%;transform:translateX(-50%);width:700px;height:320px;background:radial-gradient(ellipse,rgba(255,70,85,.12) 0%,transparent 70%);pointer-events:none;}
+.l-lines{position:absolute;inset:0;background:repeating-linear-gradient(-55deg,transparent,transparent 60px,rgba(255,70,85,.02) 60px,rgba(255,70,85,.02) 61px);pointer-events:none;}
+.hero{text-align:center;max-width:760px;position:relative;z-index:1;}
+.hero-eye{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:4px;color:var(--red);text-transform:uppercase;margin-bottom:18px;display:flex;align-items:center;justify-content:center;gap:10px;animation:fadeUp .5s ease both;}
+.hero-eye::before,.hero-eye::after{content:'';width:32px;height:1px;background:var(--red);opacity:.55;}
+h1.hero-t{font-family:'Bebas Neue',sans-serif;font-size:clamp(68px,13vw,148px);line-height:.88;letter-spacing:2px;animation:fadeUp .5s .08s ease both;}
+h1.hero-t .r{color:var(--red);}
+h1.hero-t .o{-webkit-text-stroke:2px var(--white);color:transparent;}
+.hero-sub{font-size:16px;color:var(--off);margin:22px auto 32px;max-width:460px;line-height:1.65;animation:fadeUp .5s .16s ease both;}
+.hero-ctas{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;animation:fadeUp .5s .24s ease both;}
+.hero-stats{display:flex;gap:40px;justify-content:center;margin-top:52px;animation:fadeUp .5s .32s ease both;}
+.hs-n{font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--red);line-height:1;}
+.hs-l{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);letter-spacing:2px;margin-top:3px;}
+
+/* how it works */
+.how-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px;background:rgba(255,70,85,.07);}
+.how-card{background:var(--mid);padding:28px 24px;transition:background .2s;}
+.how-card:hover{background:var(--mid2);}
+.how-n{font-family:'Bebas Neue',sans-serif;font-size:56px;color:rgba(255,70,85,.14);line-height:1;}
+.how-t{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;margin:6px 0 8px;}
+.how-p{font-size:14px;color:var(--off);line-height:1.6;}
+
+/* animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+@keyframes tick{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+@keyframes popIn{from{opacity:0;transform:scale(.82);}to{opacity:1;transform:scale(1);}}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes loadBar{0%{transform:translateX(-100%);}50%{transform:translateX(0);}100%{transform:translateX(100%);}}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--darker);}
+::-webkit-scrollbar-thumb{background:rgba(255,70,85,.25);}
+
+@media(max-width:480px){
+  nav{padding:0 14px;}
+  .auth-box{padding:26px 18px;}
+  .card-stack{height:530px;}
+  .card-img{height:270px;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div class="loading-screen" id="loading">
+  <div class="loading-logo">LATAM<em>ATCH</em></div>
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+  <div class="loading-txt">CARGANDO...</div>
+</div>
+
+<!-- NAV -->
+<nav id="nav">
+  <a class="logo" onclick="goHome()">LATAM<em>ATCH</em><div class="logo-beta">BETA</div></a>
+  <div class="nav-r">
+    <span class="nav-disc">NO AFILIADO CON RIOT GAMES · +18</span>
+    <button class="btn btn-ghost btn-sm" id="nav-in" onclick="showView('login')">Entrar</button>
+    <button class="btn btn-red btn-sm" id="nav-reg" onclick="showView('register')">Registrate</button>
+    <button class="btn btn-ghost btn-sm hidden" id="nav-prof" onclick="showAppPage('profile')">Mi perfil</button>
+  </div>
+</nav>
+
+<!-- TICKER -->
+<div id="ticker-bar" style="margin-top:58px;">
+  <div class="ticker">
+    <div class="tick-track">
+      <span class="tick-item">Encuentra tu duo en LATAM</span>
+      <span class="tick-item">Argentina · México · Colombia · Chile · Perú</span>
+      <span class="tick-item">Swipe para matchear</span>
+      <span class="tick-item">Solo entretenimiento · +18</span>
+      <span class="tick-item">Venezuela · Brasil · Ecuador · Uruguay</span>
+      <span class="tick-item">Filtrá por rank y rol</span>
+      <span class="tick-item">Encuentra tu duo en LATAM</span>
+      <span class="tick-item">Argentina · México · Colombia · Chile · Perú</span>
+      <span class="tick-item">Swipe para matchear</span>
+      <span class="tick-item">Solo entretenimiento · +18</span>
+      <span class="tick-item">Venezuela · Brasil · Ecuador · Uruguay</span>
+      <span class="tick-item">Filtrá por rank y rol</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════ LANDING ════ -->
+<div class="view active" id="view-landing" style="margin-top:-34px;">
+  <div class="landing-wrap" style="padding-top:40px;">
+    <div class="l-lines"></div>
+    <div class="l-glow"></div>
+    <div class="hero">
+      <div class="hero-eye">La comunidad de e-dating de VALORANT para LATAM</div>
+      <h1 class="hero-t"><span class="r">ENCONTRÁ</span><br>TU<br><span class="o">EDATE</span></h1>
+      <p class="hero-sub">Una página de e-dating <strong>para la región</strong>. Sólo gente real. Filtrá por rank, rol, país y género. Swipe, matcheá, coordiná duo.</p>
+      <div class="hero-ctas">
+        <button class="btn btn-red btn-lg" onclick="showView('register')">Crear perfil gratis</button>
+        <button class="btn btn-ghost btn-lg" onclick="showView('login')">Ya tengo cuenta</button>
+      </div>
+      <div class="hero-stats">
+        <div><div class="hs-n" id="stat-n">—</div><div class="hs-l">Jugadores</div></div>
+        <div><div class="hs-n">9</div><div class="hs-l">Países</div></div>
+        <div><div class="hs-n">24/7</div><div class="hs-l">Online</div></div>
+      </div>
+    </div>
+
+    <div style="width:100%;max-width:940px;margin:70px auto 0;padding:0 14px;">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:4px;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:8px;"><span style="opacity:.4">//</span> CÓMO FUNCIONA</div>
+      <h2 style="font-family:'Bebas Neue',sans-serif;font-size:clamp(32px,5vw,60px);letter-spacing:2px;margin-bottom:32px;">DIFERENTE <span style="color:var(--red)">DE VERDAD</span></h2>
+      <div class="how-grid">
+        <div class="how-card"><div class="how-n">01</div><div class="how-t">Sólo gente real</div><p class="how-p">Sin perfiles falsos. Para aparecer tenés que registrarte con email y completar tu perfil. Nada de bots ni cuentas seed.</p></div>
+        <div class="how-card"><div class="how-n">02</div><div class="how-t">Filtros avanzados</div><p class="how-p">Filtrá por rank, rol, país, género y agente. Porque ya bastante tilt da jugar con alguien incompatible en ranked.</p></div>
+        <div class="how-card"><div class="how-n">03</div><div class="how-t">Swipe tipo Tinder</div><p class="how-p">Deslizá perfiles. Derecha = duo request. Match cuando es mutuo. Simple como entrar site con Neon y hacer el clutch.</p></div>
+        <div class="how-card"><div class="how-n">04</div><div class="how-t">Subí tu clip</div><p class="how-p">Linkeá tu mejor jugada de YouTube. Que te conozcan por tus plays. O por tus fails. Sin juicio.</p></div>
+      </div>
+    </div>
+
+    <div style="padding:50px 14px 0;text-align:center;">
+      <button class="btn btn-red btn-lg" onclick="showView('register')">Empezar — es gratis</button>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);margin-top:14px;letter-spacing:1px;">NO AFILIADO CON RIOT GAMES · SOLO ENTRETENIMIENTO · +18</div>
+    </div>
+
+    <footer style="margin-top:56px;border-top:1px solid rgba(255,70,85,.1);padding:22px 14px;text-align:center;width:100%;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:4px;margin-bottom:8px;">LATAM<em style="color:var(--red);font-style:normal;">ATCH</em></div>
+      <div style="display:flex;justify-content:center;gap:18px;margin-bottom:8px;flex-wrap:wrap;">
+        <a href="#" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--gray);text-decoration:none;letter-spacing:1px;">Términos</a>
+        <a href="#" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--gray);text-decoration:none;letter-spacing:1px;">Privacidad</a>
+        <a href="#" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--gray);text-decoration:none;letter-spacing:1px;">Disclaimer</a>
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);line-height:1.8;max-width:500px;margin:0 auto;">NO AFILIADO NI AVALADO POR RIOT GAMES · VALORANT SON MARCAS DE RIOT GAMES<br>SOLO ENTRETENIMIENTO · +18 · © 2026 LATAMATCH</div>
+    </footer>
+  </div>
+</div>
+
+<!-- ════ REGISTER ════ -->
+<div class="view" id="view-register">
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:20px;margin-top:92px;">
+    <div class="auth-box" style="max-width:500px;">
+      <div class="step-bar">
+        <div class="step-seg cur" id="s1"></div>
+        <div class="step-seg" id="s2"></div>
+        <div class="step-seg" id="s3"></div>
+      </div>
+
+      <!-- step 1 -->
+      <div id="rs1">
+        <div class="auth-title">CREAR <span style="color:var(--red)">CUENTA</span></div>
+        <div class="auth-sub">Paso 1 de 3 — Datos de acceso</div>
+        <div class="err" id="re1"></div>
+        <div class="field"><label>Nombre de usuario *</label><input id="r-user" placeholder="TuNickValorant" maxlength="24" oninput="this.value=this.value.replace(/\s/g,'')"></div>
+        <div class="field-row">
+          <div class="field"><label>Email *</label><input id="r-email" type="email" placeholder="tu@email.com"></div>
+          <div class="field"><label>Edad *</label><input id="r-age" type="number" min="18" max="99" placeholder="18+"></div>
+        </div>
+        <div class="field"><label>Contraseña * (mín. 6 caracteres)</label><input id="r-pass" type="password" placeholder="••••••••"></div>
+        <div class="field"><label>Repetir contraseña *</label><input id="r-pass2" type="password" placeholder="••••••••"></div>
+        <button class="btn btn-red btn-full" id="rs1-btn" onclick="rs1()">Siguiente →</button>
+        <div class="auth-switch">¿Ya tenés cuenta? <a onclick="showView('login')">Entrar</a></div>
+      </div>
+
+      <!-- step 2 -->
+      <div id="rs2" style="display:none;">
+        <div class="auth-title">TU <span style="color:var(--red)">PERFIL</span></div>
+        <div class="auth-sub">Paso 2 de 3 — Datos del juego</div>
+        <div class="err" id="re2"></div>
+        <div style="margin-bottom:16px;">
+          <div class="field" style="margin-bottom:8px;"><label>Foto de perfil</label></div>
+          <div class="av-upload">
+            <div class="av-prev" id="r-av-prev">🎮</div>
+            <div>
+              <label class="av-lbl" for="r-av-inp">📂 Subir foto</label>
+              <input type="file" id="r-av-inp" accept="image/*" style="display:none;" onchange="handleAv(this,'r-av-prev','r-av-data')">
+              <input type="hidden" id="r-av-data">
+              <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);margin-top:5px;letter-spacing:.5px;">JPG/PNG/WebP · máx 2MB</div>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>Riot ID * (ej: TuNick#LATAM)</label><input id="r-riot" placeholder="NickName#TAG"></div>
+        <div class="field-row">
+          <div class="field"><label>Rank *</label>
+            <select id="r-rank"><option value="">Seleccioná</option>
+              <optgroup label="── Bajo ──">
+                <option>Hierro 1</option><option>Hierro 2</option><option>Hierro 3</option>
+                <option>Bronce 1</option><option>Bronce 2</option><option>Bronce 3</option>
+                <option>Plata 1</option><option>Plata 2</option><option>Plata 3</option>
+              </optgroup>
+              <optgroup label="── Medio ──">
+                <option>Oro 1</option><option>Oro 2</option><option>Oro 3</option>
+                <option>Platino 1</option><option>Platino 2</option><option>Platino 3</option>
+                <option>Diamante 1</option><option>Diamante 2</option><option>Diamante 3</option>
+              </optgroup>
+              <optgroup label="── Alto ──">
+                <option>Ascendente 1</option><option>Ascendente 2</option><option>Ascendente 3</option>
+                <option>Inmortal 1</option><option>Inmortal 2</option><option>Inmortal 3</option>
+                <option>Radiante</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="field"><label>Rol principal *</label>
+            <select id="r-role"><option value="">Seleccioná</option>
+              <option>Duelista</option><option>Iniciador</option><option>Controlador</option><option>Centinela</option><option>Flex</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>País *</label>
+            <select id="r-country"><option value="">Seleccioná</option>
+              <option>Argentina 🇦🇷</option><option>México 🇲🇽</option><option>Colombia 🇨🇴</option>
+              <option>Chile 🇨🇱</option><option>Perú 🇵🇪</option><option>Venezuela 🇻🇪</option>
+              <option>Brasil 🇧🇷</option><option>Ecuador 🇪🇨</option><option>Uruguay 🇺🇾</option>
+              <option>Bolivia 🇧🇴</option><option>Paraguay 🇵🇾</option>
+            </select>
+          </div>
+          <div class="field"><label>Me identifico como</label>
+            <select id="r-gender"><option value="">Prefiero no decir</option>
+              <option>Chico</option><option>Chica</option><option>No binario</option><option>Otro</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" style="flex:1;padding:12px;" onclick="goStep(1)">← Atrás</button>
+          <button class="btn btn-red" style="flex:2;padding:12px;" id="rs2-btn" onclick="rs2()">Siguiente →</button>
+        </div>
+      </div>
+
+      <!-- step 3 -->
+      <div id="rs3" style="display:none;">
+        <div class="auth-title">CASI <span style="color:var(--red)">LISTO</span></div>
+        <div class="auth-sub">Paso 3 de 3 — Bio y clip</div>
+        <div class="err" id="re3"></div>
+        <div class="field"><label>Bio * (máx 200 caracteres)</label>
+          <textarea id="r-bio" placeholder="Ej: Main Jett, juego de noche, busco duo para ranked sin tilt. Si plantás el spike, te quiero." maxlength="200"></textarea>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);margin-top:4px;text-align:right;" id="bio-count">0/200</div>
+        </div>
+        <div class="field"><label>Agente favorito</label>
+          <select id="r-agent"><option value="">Ninguno (opcional)</option>
+            <optgroup label="Duelistas"><option>Jett</option><option>Reyna</option><option>Phoenix</option><option>Neon</option><option>Yoru</option><option>Iso</option></optgroup>
+            <optgroup label="Iniciadores"><option>Sova</option><option>Breach</option><option>Skye</option><option>KAY/O</option><option>Fade</option><option>Gekko</option></optgroup>
+            <optgroup label="Controladores"><option>Brimstone</option><option>Omen</option><option>Viper</option><option>Astra</option><option>Harbor</option><option>Clove</option></optgroup>
+            <optgroup label="Centinelas"><option>Killjoy</option><option>Cypher</option><option>Sage</option><option>Chamber</option><option>Deadlock</option><option>Vyse</option></optgroup>
+          </select>
+        </div>
+        <div class="field"><label>Clip de YouTube (opcional)</label>
+          <input id="r-yt" placeholder="https://youtube.com/watch?v=... o youtu.be/...">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--gray);margin-top:4px;letter-spacing:.5px;">Tu mejor clip, tu peor fail, lo que quieras 🎬</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" style="flex:1;padding:12px;" onclick="goStep(2)">← Atrás</button>
+          <button class="btn btn-red" style="flex:2;padding:12px;" id="rs3-btn" onclick="finishReg()">¡Crear perfil! 🎮</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ LOGIN ════ -->
+<div class="view" id="view-login">
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:20px;margin-top:92px;">
+    <div class="auth-box">
+      <div class="auth-title">BIENVENIDO <span style="color:var(--red)">DE VUELTA</span></div>
+      <div class="auth-sub">Ingresá para encontrar tu duo</div>
+      <div class="err" id="lerr"></div>
+      <div class="field"><label>Email o usuario</label><input id="l-id" placeholder="tu@email.com o TuNick"></div>
+      <div class="field"><label>Contraseña</label><input id="l-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn btn-red btn-full" id="l-btn" onclick="doLogin()">Entrar →</button>
+      <div class="auth-switch">¿No tenés cuenta? <a onclick="showView('register')">Registrate gratis</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ APP ════ -->
+<div class="view" id="view-app">
+
+  <!-- SWIPE -->
+  <div class="page" id="page-swipe" style="display:none;flex-direction:column;align-items:center;">
+    <!-- firebase not configured banner -->
+    <div id="fb-not-cfg" class="fb-banner hidden" style="width:100%;max-width:420px;margin:0 0 14px;">
+      <div class="fb-banner-icon">⚠️</div>
+      <div class="fb-banner-text">
+        <strong>MODO LOCAL — SIN BACKEND</strong><br>
+        Los datos se guardan solo en tu navegador. Para que otros usuarios puedan registrarse y aparecer acá, necesitás configurar Firebase.<br>
+        <a href="#" onclick="showFirebaseGuide()">Ver guía de setup →</a>
+      </div>
+    </div>
+    <div class="swipe-topbar">
+      <div class="swipe-title">DESCUBRÍ</div>
+      <button class="filter-btn" onclick="openFilters()">⚙ Filtros <span id="filter-count-badge" style="display:none;background:var(--red);color:var(--dark);font-size:9px;padding:1px 5px;margin-left:2px;border-radius:2px;"></span></button>
+    </div>
+    <div class="filter-active-chips" id="fac-wrap"></div>
+    <div class="card-stack" id="card-stack"></div>
+    <div class="swipe-btns">
+      <button class="sbt sbt-nope" onclick="swipe('left')" title="Descartar (←)">✗</button>
+      <button class="sbt sbt-super" onclick="swipe('super')" title="Super Request (↑)">⭐</button>
+      <button class="sbt sbt-like" onclick="swipe('right')" title="Duo Request (→)">♥</button>
+    </div>
+    <div class="swipe-hint">← DESCARTAR &nbsp;·&nbsp; DUO REQUEST →</div>
+  </div>
+
+  <!-- REQUESTS -->
+  <div class="page" id="page-requests">
+    <div class="page-inner">
+      <h2 style="font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:2px;margin-bottom:4px;">DUO <span style="color:var(--red)">REQUESTS</span></h2>
+      <p style="font-size:14px;color:var(--off);margin-bottom:16px;">Tus requests recibidos, enviados y matches</p>
+      <div class="req-tabs">
+        <div class="rt active" onclick="switchRT(this,'received')">Recibidos <span id="rc-count"></span></div>
+        <div class="rt" onclick="switchRT(this,'sent')">Enviados</div>
+        <div class="rt" onclick="switchRT(this,'matches')">Matches 💚</div>
+      </div>
+      <div id="req-list"></div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="page" id="page-profile">
+    <div class="page-inner" style="max-width:560px;">
+      <div class="prof-header">
+        <div class="prof-top">
+          <div class="my-av" id="my-av" onclick="document.getElementById('av-edit-inp').click()">🎮</div>
+          <input type="file" id="av-edit-inp" accept="image/*" style="display:none;" onchange="handleAv(this,'my-av','av-edit-data');saveAvatarFromEdit()">
+          <input type="hidden" id="av-edit-data">
+          <div style="flex:1;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;" id="p-name">—</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--red);margin-bottom:8px;" id="p-tag">—</div>
+            <div class="badges" id="p-badges"></div>
+          </div>
+        </div>
+      </div>
+      <div class="prof-sec">
+        <div class="prof-sec-title">Sobre mí <button class="prof-edit-btn" onclick="openModal('bio')">Editar</button></div>
+        <div id="p-bio" style="font-size:15px;color:var(--off);line-height:1.6;"></div>
+      </div>
+      <div class="prof-sec">
+        <div class="prof-sec-title">Info del juego <button class="prof-edit-btn" onclick="openModal('game')">Editar</button></div>
+        <div class="pfd"><span class="pfd-lbl">Rank</span><span class="pfd-val" id="p-rank">—</span></div>
+        <div class="pfd"><span class="pfd-lbl">Rol</span><span class="pfd-val" id="p-role">—</span></div>
+        <div class="pfd"><span class="pfd-lbl">País</span><span class="pfd-val" id="p-country">—</span></div>
+        <div class="pfd"><span class="pfd-lbl">Agente favorito</span><span class="pfd-val" id="p-agent">—</span></div>
+        <div class="pfd"><span class="pfd-lbl">Me identifico como</span><span class="pfd-val" id="p-gender">—</span></div>
+      </div>
+      <div class="prof-sec">
+        <div class="prof-sec-title">Mi clip <button class="prof-edit-btn" onclick="openModal('clip')">Editar</button></div>
+        <div id="p-yt"></div>
+      </div>
+      <div class="prof-sec">
+        <div class="prof-sec-title">Estadísticas</div>
+        <div class="pfd"><span class="pfd-lbl">Requests enviados</span><span class="pfd-val" id="p-sent">—</span></div>
+        <div class="pfd"><span class="pfd-lbl">Requests recibidos</span><span class="pfd-val" id="p-rcvd">—</span></div>
+        <div class="pfd"><span class="pfd-lbl">Matches</span><span class="pfd-val" id="p-matches">—</span></div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">CERRAR SESIÓN</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM TABS -->
+  <div class="app-tabs">
+    <button class="tab active" id="tab-swipe" onclick="showAppPage('swipe')">
+      <div class="ti">🃏</div>Descubrí
+    </button>
+    <button class="tab" id="tab-requests" onclick="showAppPage('requests')">
+      <div class="ti">💌</div>Requests
+      <span class="tab-badge" id="req-badge">0</span>
+    </button>
+    <button class="tab" id="tab-profile" onclick="showAppPage('profile')">
+      <div class="ti">👤</div>Perfil
+    </button>
+  </div>
+</div>
+
+<!-- ════ FILTER DRAWER ════ -->
+<div class="filter-overlay" id="filter-overlay" onclick="if(event.target===this)closeFilters()">
+  <div class="filter-drawer" id="filter-drawer">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title">FILTROS <button class="btn-ghost btn-xs btn" style="margin-left:auto;" onclick="clearFilters()">Limpiar todo</button></div>
+
+    <div class="filter-section">
+      <div class="filter-label">Género</div>
+      <div class="chips" id="f-gender">
+        <div class="chip" data-val="Chico" onclick="toggleChip(this,'gender')">Chico</div>
+        <div class="chip" data-val="Chica" onclick="toggleChip(this,'gender')">Chica</div>
+        <div class="chip" data-val="No binario" onclick="toggleChip(this,'gender')">No binario</div>
+        <div class="chip" data-val="" onclick="toggleChip(this,'gender')">No especificado</div>
+      </div>
+    </div>
+    <div class="filter-section">
+      <div class="filter-label">Rank</div>
+      <div class="chips" id="f-rank">
+        <div class="chip" data-group="Hierro" onclick="toggleGroup(this,'rank','Hierro')">Hierro</div>
+        <div class="chip" data-group="Bronce" onclick="toggleGroup(this,'rank','Bronce')">Bronce</div>
+        <div class="chip" data-group="Plata" onclick="toggleGroup(this,'rank','Plata')">Plata</div>
+        <div class="chip" data-group="Oro" onclick="toggleGroup(this,'rank','Oro')">Oro</div>
+        <div class="chip" data-group="Platino" onclick="toggleGroup(this,'rank','Platino')">Platino</div>
+        <div class="chip" data-group="Diamante" onclick="toggleGroup(this,'rank','Diamante')">Diamante</div>
+        <div class="chip" data-group="Ascendente" onclick="toggleGroup(this,'rank','Ascendente')">Ascendente</div>
+        <div class="chip" data-group="Inmortal" onclick="toggleGroup(this,'rank','Inmortal')">Inmortal</div>
+        <div class="chip" data-val="Radiante" onclick="toggleChip(this,'rank')" style="color:var(--gold);border-color:rgba(245,165,36,.3);">✦ Radiante</div>
+      </div>
+    </div>
+    <div class="filter-section">
+      <div class="filter-label">Rol</div>
+      <div class="chips" id="f-role">
+        <div class="chip" data-val="Duelista" onclick="toggleChip(this,'role')">Duelista</div>
+        <div class="chip" data-val="Iniciador" onclick="toggleChip(this,'role')">Iniciador</div>
+        <div class="chip" data-val="Controlador" onclick="toggleChip(this,'role')">Controlador</div>
+        <div class="chip" data-val="Centinela" onclick="toggleChip(this,'role')">Centinela</div>
+        <div class="chip" data-val="Flex" onclick="toggleChip(this,'role')">Flex</div>
+      </div>
+    </div>
+    <div class="filter-section">
+      <div class="filter-label">País</div>
+      <div class="chips" id="f-country">
+        <div class="chip" data-val="Argentina 🇦🇷" onclick="toggleChip(this,'country')">🇦🇷 ARG</div>
+        <div class="chip" data-val="México 🇲🇽" onclick="toggleChip(this,'country')">🇲🇽 MEX</div>
+        <div class="chip" data-val="Colombia 🇨🇴" onclick="toggleChip(this,'country')">🇨🇴 COL</div>
+        <div class="chip" data-val="Chile 🇨🇱" onclick="toggleChip(this,'country')">🇨🇱 CHI</div>
+        <div class="chip" data-val="Perú 🇵🇪" onclick="toggleChip(this,'country')">🇵🇪 PER</div>
+        <div class="chip" data-val="Venezuela 🇻🇪" onclick="toggleChip(this,'country')">🇻🇪 VEN</div>
+        <div class="chip" data-val="Brasil 🇧🇷" onclick="toggleChip(this,'country')">🇧🇷 BRA</div>
+        <div class="chip" data-val="Ecuador 🇪🇨" onclick="toggleChip(this,'country')">🇪🇨 ECU</div>
+        <div class="chip" data-val="Uruguay 🇺🇾" onclick="toggleChip(this,'country')">🇺🇾 URU</div>
+      </div>
+    </div>
+    <div class="filter-section">
+      <div class="filter-label">Tiene clip de YouTube</div>
+      <div class="chips" id="f-hasyt">
+        <div class="chip" data-val="true" onclick="toggleChipSingle(this,'hasYt')">Con clip 🎬</div>
+      </div>
+    </div>
+
+    <div class="filter-actions">
+      <button class="btn btn-ghost" style="flex:1;padding:12px;" onclick="closeFilters()">Cancelar</button>
+      <button class="btn btn-red" style="flex:2;padding:12px;" onclick="applyFilters()">Aplicar filtros →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ EDIT MODAL ════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ════ MATCH POPUP ════ -->
+<div class="match-overlay" id="match-overlay">
+  <div class="match-box">
+    <div style="font-size:36px;margin-bottom:8px;">🎉</div>
+    <div class="match-title">¡MATCH!</div>
+    <div class="match-avs" id="match-avs"></div>
+    <div class="match-sub" id="match-sub"></div>
+    <div class="match-acts">
+      <button class="btn btn-ghost btn-sm" onclick="closeMatch()">Seguir buscando</button>
+      <button class="btn btn-green btn-sm" onclick="closeMatch();showAppPage('requests')">Ver requests →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ FIREBASE GUIDE MODAL ════ -->
+<div class="modal-overlay" id="fb-guide-overlay">
+  <div class="modal" style="max-width:540px;">
+    <button class="modal-close" onclick="document.getElementById('fb-guide-overlay').classList.remove('open')">✕</button>
+    <div class="modal-title" style="font-size:22px;">🔥 CONFIGURAR FIREBASE</div>
+    <div style="font-size:14px;color:var(--off);line-height:1.8;">
+      <p style="margin-bottom:12px;">Para que la app funcione online con usuarios reales de todo LATAM necesitás Firebase (gratis hasta ~50k usuarios).</p>
+      <div style="background:rgba(0,0,0,.35);padding:14px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--gold);line-height:2;letter-spacing:.5px;margin-bottom:14px;">
+        1. Ir a <strong>console.firebase.google.com</strong><br>
+        2. Crear proyecto → darle nombre "latamatch"<br>
+        3. Agregar app Web (&lt;/&gt;)<br>
+        4. Copiar el objeto <em>firebaseConfig</em><br>
+        5. Pegarlo en el código del HTML (arriba del todo)<br>
+        6. Ir a <em>Authentication</em> → Email/Password → Habilitar<br>
+        7. Ir a <em>Firestore Database</em> → Crear base<br>
+        8. Copiar las reglas de seguridad del comentario del código<br>
+        9. (Opcional) <em>Storage</em> para fotos de perfil
+      </div>
+      <p style="color:var(--off);font-size:13px;">También podés contratar a alguien para que lo configure por vos, o preguntarme más detalles.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════
+// STATE
+// ══════════════════════════════
+let CU = null; // current user object
+let fbReady = false;
+let swipeQueue = [];
+let swipeIdx = 0;
+let dragging = false, dStartX = 0, dStartY = 0, dCurX = 0;
+let frontCard = null;
+let activeFilters = { gender:[], rank:[], role:[], country:[], hasYt: false };
+let currentRT = 'received';
+let regTemp = {};
+
+// ══════════════════════════════
+// WAIT FOR FIREBASE
+// ══════════════════════════════
+window.addEventListener('fb-ready', () => {
+  fbReady = window._fb?.firebaseReady === true;
+  if (fbReady) {
+    window._fb.onAuthStateChanged(window._fb.auth, async (fbUser) => {
+      if (fbUser) {
+        const snap = await window._fb.getDoc(window._fb.doc(window._fb.db, 'users', fbUser.uid));
+        if (snap.exists()) {
+          CU = { id: fbUser.uid, ...snap.data() };
+          enterApp();
+        }
+      }
+      document.getElementById('loading').style.display = 'none';
+    });
+  } else {
+    // local mode
+    const sid = localStorage.getItem('lm_sid');
+    if (sid) {
+      const u = getLocalUser(sid);
+      if (u) { CU = u; enterApp(); }
+    }
+    document.getElementById('loading').style.display = 'none';
+    updateLandingStat();
+  }
+});
+
+// ══════════════════════════════
+// LOCAL STORAGE HELPERS (fallback)
+// ══════════════════════════════
+const LS = {
+  users: () => JSON.parse(localStorage.getItem('lm_users')||'[]'),
+  saveUsers: (u) => localStorage.setItem('lm_users', JSON.stringify(u)),
+  requests: () => JSON.parse(localStorage.getItem('lm_reqs')||'[]'),
+  saveReqs: (r) => localStorage.setItem('lm_reqs', JSON.stringify(r)),
+  seen: (uid) => JSON.parse(localStorage.getItem('lm_seen_'+uid)||'[]'),
+  addSeen: (uid, pid) => { const s=LS.seen(uid); if(!s.includes(pid))s.push(pid); localStorage.setItem('lm_seen_'+uid,JSON.stringify(s)); }
+};
+
+function getLocalUser(id){ return LS.users().find(u=>u.id===id)||null; }
+function updateLocalUser(u){ const all=LS.users(); const i=all.findIndex(x=>x.id===u.id); if(i>=0)all[i]=u; else all.push(u); LS.saveUsers(all); }
+
+function updateLandingStat(){
+  const n = LS.users().length;
+  const el = document.getElementById('stat-n');
+  if(el) el.textContent = n > 0 ? n.toLocaleString() : '0';
+}
+
+// ══════════════════════════════
+// VIEWS
+// ══════════════════════════════
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  const inApp = name==='app';
+  document.getElementById('nav-in').classList.toggle('hidden', inApp||name==='login');
+  document.getElementById('nav-reg').classList.toggle('hidden', inApp||name==='register');
+  document.getElementById('nav-prof').classList.toggle('hidden', !inApp);
+  window.scrollTo(0,0);
+}
+function goHome(){ showView('landing'); }
+
+function showAppPage(p){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  const pg = document.getElementById('page-'+p);
+  const tb = document.getElementById('tab-'+p);
+  if(pg){ pg.classList.add('active'); if(p==='swipe'){pg.style.display='flex';}else{pg.style.display='block';} }
+  if(tb) tb.classList.add('active');
+  if(p==='profile') renderProfile();
+  if(p==='requests') renderRequests(currentRT);
+  if(p==='swipe') { buildSwipeQueue(); renderCards(); }
+}
+
+// ══════════════════════════════
+// REGISTER
+// ══════════════════════════════
+function goStep(n){
+  document.getElementById('rs1').style.display = n===1?'':'none';
+  document.getElementById('rs2').style.display = n===2?'':'none';
+  document.getElementById('rs3').style.display = n===3?'':'none';
+  ['s1','s2','s3'].forEach((id,i)=>{
+    const el = document.getElementById(id);
+    el.className = 'step-seg' + (i < n-1 ? ' done' : i===n-1?' cur':'');
+  });
+}
+document.getElementById('r-bio')?.addEventListener('input', function(){
+  document.getElementById('bio-count').textContent = `${this.value.length}/200`;
+});
+
+function rs1(){
+  const user=v('r-user').trim(), email=v('r-email').trim(), age=parseInt(v('r-age')), pass=v('r-pass'), pass2=v('r-pass2');
+  const err=document.getElementById('re1'); err.style.display='none';
+  if(!user||!email||!pass) return showErr(err,'Completá todos los campos obligatorios.');
+  if(!/^[a-zA-Z0-9_.-]{3,24}$/.test(user)) return showErr(err,'Usuario: solo letras, números, guiones y puntos (3-24 caracteres).');
+  if(age<18) return showErr(err,'Tenés que tener 18 años o más para registrarte.');
+  if(pass.length<6) return showErr(err,'La contraseña necesita al menos 6 caracteres.');
+  if(pass!==pass2) return showErr(err,'Las contraseñas no coinciden.');
+  // check local duplicates
+  if(!fbReady){
+    const users=LS.users();
+    if(users.find(u=>u.username.toLowerCase()===user.toLowerCase())) return showErr(err,'Ese nombre de usuario ya existe.');
+    if(users.find(u=>u.email.toLowerCase()===email.toLowerCase())) return showErr(err,'Ya hay una cuenta con ese email.');
+  }
+  regTemp={username:user,email,age,pass};
+  goStep(2);
+}
+
+function rs2(){
+  const riot=v('r-riot').trim(), rank=v('r-rank'), role=v('r-role'), country=v('r-country'), gender=v('r-gender'), avatar=v('r-av-data');
+  const err=document.getElementById('re2'); err.style.display='none';
+  if(!riot||!rank||!role||!country) return showErr(err,'Completá los campos obligatorios.');
+  if(!riot.includes('#')) return showErr(err,'El Riot ID debe tener formato: NickName#TAG');
+  regTemp={...regTemp,riotId:riot,rank,role,country,gender,avatar};
+  goStep(3);
+}
+
+async function finishReg(){
+  const bio=v('r-bio').trim(), agent=v('r-agent'), ytUrl=v('r-yt').trim();
+  const err=document.getElementById('re3'); err.style.display='none';
+  if(!bio) return showErr(err,'Escribí una bio aunque sea corta.');
+  const btn=document.getElementById('rs3-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Creando...';
+
+  const userData = { ...regTemp, bio, agent, ytUrl,
+    requestsSent:[], requestsReceived:[], matches:[],
+    createdAt: Date.now() };
+
+  if(fbReady){
+    try {
+      const {auth,db,createUserWithEmailAndPassword,doc,setDoc,serverTimestamp} = window._fb;
+      const cred = await createUserWithEmailAndPassword(auth, regTemp.email, regTemp.pass);
+      const uid = cred.user.uid;
+      const toSave = {...userData, id:uid, createdAt:serverTimestamp()};
+      delete toSave.pass; delete toSave.pass2;
+      await setDoc(doc(db,'users',uid), toSave);
+      CU = {...toSave, id:uid};
+      enterApp();
+    } catch(e) {
+      btn.disabled=false; btn.textContent='¡Crear perfil! 🎮';
+      const msg = e.code==='auth/email-already-in-use'?'Ese email ya está registrado.':
+                  e.code==='auth/invalid-email'?'Email inválido.': 'Error: '+e.message;
+      showErr(err, msg);
+    }
+  } else {
+    const id = 'u_'+Date.now();
+    const u = {...userData, id};
+    updateLocalUser(u);
+    localStorage.setItem('lm_sid', id);
+    CU = u;
+    enterApp();
+  }
+}
+
+// ══════════════════════════════
+// LOGIN
+// ══════════════════════════════
+async function doLogin(){
+  const id=v('l-id').trim(), pass=v('l-pass');
+  const err=document.getElementById('lerr'); err.style.display='none';
+  if(!id||!pass) return showErr(err,'Completá los campos.');
+  const btn=document.getElementById('l-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Entrando...';
+
+  if(fbReady){
+    try {
+      const {auth,db,signInWithEmailAndPassword,getDoc,doc} = window._fb;
+      // try email first, then username lookup
+      let email = id;
+      if(!id.includes('@')){
+        // find email by username
+        const {collection,query,where,getDocs} = window._fb;
+        const q = query(collection(db,'users'),where('username','==',id));
+        const snap = await getDocs(q);
+        if(snap.empty){ btn.disabled=false;btn.textContent='Entrar →';return showErr(err,'Usuario no encontrado.');}
+        email = snap.docs[0].data().email;
+      }
+      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      const snap = await getDoc(doc(db,'users',cred.user.uid));
+      CU = {id:cred.user.uid,...snap.data()};
+      enterApp();
+    } catch(e){
+      btn.disabled=false; btn.textContent='Entrar →';
+      showErr(err, 'Datos incorrectos. Revisá tu email/usuario y contraseña.');
+    }
+  } else {
+    const users=LS.users();
+    const u=users.find(x=>(x.email.toLowerCase()===id.toLowerCase()||x.username.toLowerCase()===id.toLowerCase())&&x.pass===pass);
+    if(!u){ btn.disabled=false;btn.textContent='Entrar →';return showErr(err,'Datos incorrectos.'); }
+    localStorage.setItem('lm_sid', u.id);
+    CU = u;
+    enterApp();
+  }
+}
+
+async function doLogout(){
+  if(fbReady) await window._fb.signOut(window._fb.auth);
+  else localStorage.removeItem('lm_sid');
+  CU=null; swipeQueue=[]; swipeIdx=0;
+  showView('landing');
+  goStep(1); regTemp={};
+  document.getElementById('nav-in').classList.remove('hidden');
+  document.getElementById('nav-reg').classList.remove('hidden');
+  document.getElementById('nav-prof').classList.add('hidden');
+}
+
+function enterApp(){
+  showView('app');
+  if(!fbReady) document.getElementById('fb-not-cfg')?.classList.remove('hidden');
+  showAppPage('swipe');
+  updateReqBadge();
+  updateLandingStat();
+}
+
+// ══════════════════════════════
+// SWIPE QUEUE
+// ══════════════════════════════
+async function buildSwipeQueue(){
+  if(!CU) return;
+  let profiles = [];
+
+  if(fbReady){
+    const {db,collection,getDocs} = window._fb;
+    const snap = await getDocs(collection(db,'users'));
+    profiles = snap.docs
+      .filter(d=>d.id!==CU.id)
+      .map(d=>({id:d.id,...d.data()}));
+  } else {
+    profiles = LS.users().filter(u=>u.id!==CU.id);
+  }
+
+  const seen = fbReady ? (CU.seenIds||[]) : LS.seen(CU.id);
+  const reqs = fbReady ? [] : LS.requests(); // for local: also filter already-requested
+
+  swipeQueue = profiles.filter(p=>{
+    if(seen.includes(p.id)) return false;
+    if(!fbReady){
+      if(reqs.find(r=>r.from===CU.id&&r.to===p.id)) return false;
+    }
+    // apply filters
+    if(activeFilters.gender.length && !activeFilters.gender.includes(p.gender||'')) return false;
+    if(activeFilters.rank.length && !activeFilters.rank.some(rg=>p.rank?.startsWith(rg)||p.rank===rg)) return false;
+    if(activeFilters.role.length && !activeFilters.role.includes(p.role)) return false;
+    if(activeFilters.country.length && !activeFilters.country.includes(p.country)) return false;
+    if(activeFilters.hasYt && !p.ytUrl) return false;
+    return true;
+  });
+
+  // shuffle
+  for(let i=swipeQueue.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [swipeQueue[i],swipeQueue[j]]=[swipeQueue[j],swipeQueue[i]];
+  }
+
+  swipeIdx = 0;
+  renderCards();
+}
+
+function renderCards(){
+  const stack = document.getElementById('card-stack');
+  if(!stack) return;
+  stack.innerHTML='';
+  const remaining = swipeQueue.slice(swipeIdx);
+  if(remaining.length===0){
+    stack.innerHTML=`<div class="no-profiles"><div class="np-icon">😔</div><div class="np-title">NO HAY MÁS PERFILES</div><div class="np-sub">Ya viste todos los perfiles que coinciden con tus filtros.<br>Probá cambiar los filtros o volvé más tarde.</div><button class="btn btn-outline-red btn-sm" style="margin-top:14px;" onclick="clearFilters();buildSwipeQueue()">Limpiar filtros</button></div>`;
+    frontCard=null;return;
+  }
+  const show=remaining.slice(0,2);
+  show.slice().reverse().forEach((p,i)=>{
+    const isFront = i===show.length-1;
+    const card=makeCard(p,isFront);
+    stack.appendChild(card);
+  });
+  frontCard=stack.querySelector('.front');
+  if(frontCard) attachDrag(frontCard);
+}
+
+function makeCard(p, isFront){
+  const el=document.createElement('div');
+  el.className='swipe-card '+(isFront?'front':'back');
+  el.dataset.id=p.id;
+  const ytId = p.ytUrl ? getYtId(p.ytUrl) : null;
+
+  el.innerHTML=`
+    <div class="card-img">
+      ${p.avatar ? `<img src="${p.avatar}" loading="lazy">` : `<div class="card-img-placeholder">🎮</div>`}
+      <div class="card-lbl card-lbl-like" id="lbl-like-${p.id}">DUO!</div>
+      <div class="card-lbl card-lbl-nope" id="lbl-nope-${p.id}">NOPE</div>
+    </div>
+    <div class="card-body">
+      <div class="card-name-row">
+        <div class="card-name">${esc(p.username)}</div>
+        <div class="card-age">${p.age} años</div>
+      </div>
+      <div class="card-tag">${esc(p.riotId||'')}${p.gender&&p.gender!=='Prefiero no decir'?` · ${p.gender}`:''}</div>
+      <div class="badges">
+        <span class="badge b-rank">${p.rank}</span>
+        <span class="badge b-role">${p.role}</span>
+        <span class="badge b-country">${p.country}</span>
+        ${p.agent?`<span class="badge b-agent">🎮 ${p.agent}</span>`:''}
+      </div>
+      <div class="card-bio">${esc(p.bio||'')}</div>
+    </div>
+    ${ytId?`<div class="card-yt"><iframe src="https://www.youtube.com/embed/${ytId}" allowfullscreen loading="lazy"></iframe></div>`:''}
+  `;
+  return el;
+}
+
+// drag
+function attachDrag(card){
+  card.addEventListener('mousedown', ds);
+  card.addEventListener('touchstart', ds, {passive:true});
+}
+function ds(e){ if(!frontCard)return; dragging=true; const p=e.touches?e.touches[0]:e; dStartX=p.clientX;dStartY=p.clientY;dCurX=0; document.addEventListener('mousemove',dm);document.addEventListener('mouseup',de);document.addEventListener('touchmove',dm,{passive:false});document.addEventListener('touchend',de); }
+function dm(e){ if(!dragging||!frontCard)return; if(e.cancelable)e.preventDefault(); const p=e.touches?e.touches[0]:e; dCurX=p.clientX-dStartX; const dy=p.clientY-dStartY; frontCard.style.transition='none'; frontCard.style.transform=`translate(${dCurX}px,${dy}px) rotate(${dCurX*.08}deg)`;
+  const like=frontCard.querySelector('.card-lbl-like'), nope=frontCard.querySelector('.card-lbl-nope');
+  const r=Math.min(Math.abs(dCurX)/150,1);
+  if(like)like.style.opacity=dCurX>20?r:0;
+  if(nope)nope.style.opacity=dCurX<-20?r:0;
+}
+function de(){ if(!dragging)return; dragging=false; document.removeEventListener('mousemove',dm);document.removeEventListener('mouseup',de);document.removeEventListener('touchmove',dm);document.removeEventListener('touchend',de);
+  if(!frontCard)return;
+  if(dCurX>100) swipe('right');
+  else if(dCurX<-100) swipe('left');
+  else { frontCard.style.transition='transform .35s cubic-bezier(.175,.885,.32,1.3)'; frontCard.style.transform=''; setTimeout(()=>{if(frontCard)frontCard.style.transition='';},350); }
+}
+
+function swipe(dir){
+  const profile=swipeQueue[swipeIdx];
+  if(!profile) return;
+  if(frontCard){
+    const tx=dir==='right'||dir==='super'?700:-700;
+    const rot=dir==='right'||dir==='super'?25:-25;
+    frontCard.style.transition='transform .38s ease,opacity .38s ease';
+    frontCard.style.transform=`translateX(${tx}px) rotate(${rot}deg)`;
+    frontCard.style.opacity='0';
+  }
+  markSeen(profile.id);
+  if(dir==='right'||dir==='super') sendRequest(profile, dir==='super');
+  swipeIdx++;
+  setTimeout(()=>renderCards(), 350);
+}
+
+function markSeen(pid){
+  if(fbReady){ CU.seenIds=CU.seenIds||[]; if(!CU.seenIds.includes(pid))CU.seenIds.push(pid); window._fb.updateDoc(window._fb.doc(window._fb.db,'users',CU.id),{seenIds:CU.seenIds}); }
+  else LS.addSeen(CU.id, pid);
+}
+
+async function sendRequest(profile, isSuper){
+  const req={ id:'req_'+Date.now(), from:CU.id, to:profile.id, fromName:CU.username, toName:profile.username, fromAvatar:CU.avatar||'', toAvatar:profile.avatar||'', isSuper, status:'pending', createdAt:Date.now() };
+  if(fbReady){
+    const {db,addDoc,collection,query,where,getDocs,updateDoc,doc} = window._fb;
+    await addDoc(collection(db,'requests'), req);
+    // check reverse
+    const q=query(collection(db,'requests'),where('from','==',profile.id),where('to','==',CU.id),where('status','==','pending'));
+    const snap=await getDocs(q);
+    if(!snap.empty){
+      snap.docs.forEach(d=>updateDoc(d.ref,{status:'matched'}));
+      // update ours too
+      const ours=await getDocs(query(collection(db,'requests'),where('from','==',CU.id),where('to','==',profile.id)));
+      ours.docs.forEach(d=>updateDoc(d.ref,{status:'matched'}));
+      showMatchPopup(profile);
+    }
+  } else {
+    const reqs=LS.requests();
+    reqs.push(req);
+    const reverse=reqs.find(r=>r.from===profile.id&&r.to===CU.id&&r.status==='pending');
+    if(reverse){ reverse.status='matched'; req.status='matched'; showMatchPopup(profile); }
+    LS.saveReqs(reqs);
+    updateReqBadge();
+  }
+}
+
+// ══════════════════════════════
+// REQUESTS
+// ══════════════════════════════
+function switchRT(el,tab){
+  document.querySelectorAll('.rt').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  currentRT=tab;
+  renderRequests(tab);
+}
+
+async function renderRequests(tab){
+  const list=document.getElementById('req-list');
+  list.innerHTML=`<div style="text-align:center;padding:30px;"><span class="spinner"></span></div>`;
+  let items=[];
+  if(fbReady){
+    const {db,collection,query,where,getDocs} = window._fb;
+    let q;
+    if(tab==='received') q=query(collection(db,'requests'),where('to','==',CU.id),where('status','==','pending'));
+    else if(tab==='sent') q=query(collection(db,'requests'),where('from','==',CU.id),where('status','==','pending'));
+    else q=query(collection(db,'requests'),where('status','==','matched'));
+    const snap=await getDocs(q);
+    items=snap.docs.map(d=>({docId:d.id,...d.data()}));
+    if(tab==='matches') items=items.filter(r=>r.from===CU.id||r.to===CU.id);
+  } else {
+    const reqs=LS.requests();
+    if(tab==='received') items=reqs.filter(r=>r.to===CU.id&&r.status==='pending');
+    else if(tab==='sent') items=reqs.filter(r=>r.from===CU.id&&r.status==='pending');
+    else items=reqs.filter(r=>(r.from===CU.id||r.to===CU.id)&&r.status==='matched');
+  }
+  if(items.length===0){
+    list.innerHTML=`<div class="empty"><div class="empty-i">${tab==='matches'?'💔':'📭'}</div><div class="empty-t">${tab==='matches'?'AÚN NO TENÉS MATCHES':'NADA POR ACÁ'}</div></div>`;
+    return;
+  }
+  list.innerHTML=items.map(req=>{
+    const mine=req.from===CU.id;
+    const name=mine?req.toName:req.fromName, av=mine?req.toAvatar:req.fromAvatar;
+    const avHtml=av?`<img src="${av}">`:'🎮';
+    const isMatch=req.status==='matched';
+    return `<div class="req-card${isMatch?' match':''}">
+      <div class="req-av">${avHtml}</div>
+      <div class="req-info">
+        <div class="req-name">${esc(name)}${req.isSuper?' <span style="color:var(--gold);font-size:11px;">⭐</span>':''}</div>
+        <div class="req-meta">${isMatch?'💚 MATCH':mine?'Enviado':'Recibido'} · ${timeAgo(req.createdAt)}</div>
+        <div class="req-msg">${isMatch?'¡Match! Coordiná el duo 🎮':'Quiere ser tu duo en ranked'}</div>
+      </div>
+      <div class="req-acts">
+        ${tab==='received'?`<button class="btn btn-outline-red btn-xs" onclick="rejectReq('${req.id||req.docId}')">✗</button><button class="btn btn-green btn-xs" onclick="acceptReq('${req.id||req.docId}')">✓</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function acceptReq(id){
+  if(fbReady){
+    const {db,collection,query,where,getDocs,updateDoc} = window._fb;
+    const q=query(collection(db,'requests'),where('id','==',id));
+    const snap=await getDocs(q); snap.docs.forEach(d=>updateDoc(d.ref,{status:'matched'}));
+  } else {
+    const reqs=LS.requests(); const r=reqs.find(x=>x.id===id); if(r)r.status='matched'; LS.saveReqs(reqs);
+  }
+  renderRequests(currentRT); updateReqBadge();
+}
+
+async function rejectReq(id){
+  if(fbReady){
+    const {db,collection,query,where,getDocs,deleteDoc} = window._fb;
+    const q=query(collection(db,'requests'),where('id','==',id));
+    const snap=await getDocs(q); snap.docs.forEach(d=>deleteDoc(d.ref));
+  } else {
+    const reqs=LS.requests(); const i=reqs.findIndex(x=>x.id===id); if(i>=0)reqs.splice(i,1); LS.saveReqs(reqs);
+  }
+  renderRequests(currentRT); updateReqBadge();
+}
+
+async function updateReqBadge(){
+  if(!CU) return;
+  let count=0;
+  if(fbReady){
+    const {db,collection,query,where,getDocs} = window._fb;
+    const q=query(collection(db,'requests'),where('to','==',CU.id),where('status','==','pending'));
+    const snap=await getDocs(q); count=snap.size;
+  } else {
+    count=LS.requests().filter(r=>r.to===CU.id&&r.status==='pending').length;
+  }
+  const badge=document.getElementById('req-badge');
+  if(badge){ badge.textContent=count; badge.classList.toggle('on',count>0); }
+  const rcEl=document.getElementById('rc-count');
+  if(rcEl) rcEl.textContent=count>0?`(${count})`:'';
+}
+
+// ══════════════════════════════
+// PROFILE
+// ══════════════════════════════
+function renderProfile(){
+  if(!CU) return;
+  // avatar
+  const av=document.getElementById('my-av');
+  if(CU.avatar) av.innerHTML=`<img src="${CU.avatar}">`;
+  else av.textContent='🎮';
+  setTxt('p-name',CU.username);
+  setTxt('p-tag',CU.riotId||'—');
+  document.getElementById('p-badges').innerHTML=`
+    <span class="badge b-rank">${CU.rank}</span>
+    <span class="badge b-role">${CU.role}</span>
+    <span class="badge b-country">${CU.country}</span>
+  `;
+  setTxt('p-bio',CU.bio||'—');
+  setTxt('p-rank',CU.rank||'—');
+  setTxt('p-role',CU.role||'—');
+  setTxt('p-country',CU.country||'—');
+  setTxt('p-agent',CU.agent||'Ninguno');
+  setTxt('p-gender',CU.gender||'No especificado');
+
+  const ytDiv=document.getElementById('p-yt');
+  const ytId=CU.ytUrl?getYtId(CU.ytUrl):null;
+  ytDiv.innerHTML=ytId?`<div class="yt-wrap"><iframe src="https://www.youtube.com/embed/${ytId}" allowfullscreen loading="lazy"></iframe></div>`:
+    `<div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--gray);letter-spacing:1px;">Sin clip. Agregá uno con el botón Editar.</div>`;
+
+  const reqs=fbReady?[]:LS.requests();
+  setTxt('p-sent',reqs.filter(r=>r.from===CU.id).length);
+  setTxt('p-rcvd',reqs.filter(r=>r.to===CU.id).length);
+  setTxt('p-matches',reqs.filter(r=>(r.from===CU.id||r.to===CU.id)&&r.status==='matched').length);
+}
+
+function saveAvatarFromEdit(){
+  setTimeout(async ()=>{
+    const data=document.getElementById('av-edit-data').value;
+    if(!data||!CU) return;
+    CU.avatar=data;
+    if(fbReady) await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',CU.id),{avatar:data});
+    else updateLocalUser(CU);
+    renderProfile();
+  },200);
+}
+
+// ══════════════════════════════
+// EDIT MODAL
+// ══════════════════════════════
+const RANKS=['Hierro 1','Hierro 2','Hierro 3','Bronce 1','Bronce 2','Bronce 3','Plata 1','Plata 2','Plata 3','Oro 1','Oro 2','Oro 3','Platino 1','Platino 2','Platino 3','Diamante 1','Diamante 2','Diamante 3','Ascendente 1','Ascendente 2','Ascendente 3','Inmortal 1','Inmortal 2','Inmortal 3','Radiante'];
+const AGENTS=['Jett','Reyna','Phoenix','Neon','Yoru','Iso','Sova','Breach','Skye','KAY/O','Fade','Gekko','Brimstone','Omen','Viper','Astra','Harbor','Clove','Killjoy','Cypher','Sage','Chamber','Deadlock','Vyse'];
+const COUNTRIES=['Argentina 🇦🇷','México 🇲🇽','Colombia 🇨🇴','Chile 🇨🇱','Perú 🇵🇪','Venezuela 🇻🇪','Brasil 🇧🇷','Ecuador 🇪🇨','Uruguay 🇺🇾','Bolivia 🇧🇴','Paraguay 🇵🇾'];
+
+function openModal(type){
+  const body=document.getElementById('modal-body');
+  if(type==='bio'){
+    body.innerHTML=`<div class="modal-title">EDITAR BIO</div>
+      <div class="field"><label>Bio *</label><textarea id="em-bio" maxlength="200">${esc(CU.bio||'')}</textarea></div>
+      <div class="field"><label>Agente favorito</label><select id="em-agent"><option value="">Ninguno</option>${AGENTS.map(a=>`<option ${CU.agent===a?'selected':''}>${a}</option>`).join('')}</select></div>
+      <button class="btn btn-red btn-full" onclick="saveEdit('bio')">Guardar</button>`;
+  } else if(type==='game'){
+    body.innerHTML=`<div class="modal-title">INFO DEL JUEGO</div>
+      <div class="field"><label>Riot ID</label><input id="em-riot" value="${esc(CU.riotId||'')}"></div>
+      <div class="field-row">
+        <div class="field"><label>Rank</label><select id="em-rank">${RANKS.map(r=>`<option ${CU.rank===r?'selected':''}>${r}</option>`).join('')}</select></div>
+        <div class="field"><label>Rol</label><select id="em-role">${['Duelista','Iniciador','Controlador','Centinela','Flex'].map(r=>`<option ${CU.role===r?'selected':''}>${r}</option>`).join('')}</select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>País</label><select id="em-country">${COUNTRIES.map(c=>`<option ${CU.country===c?'selected':''}>${c}</option>`).join('')}</select></div>
+        <div class="field"><label>Me identifico como</label><select id="em-gender"><option value="">No especificado</option>${['Chico','Chica','No binario','Otro'].map(g=>`<option ${CU.gender===g?'selected':''}>${g}</option>`).join('')}</select></div>
+      </div>
+      <button class="btn btn-red btn-full" onclick="saveEdit('game')">Guardar</button>`;
+  } else if(type==='clip'){
+    body.innerHTML=`<div class="modal-title">MI CLIP</div>
+      <div class="field"><label>Link de YouTube</label><input id="em-yt" value="${esc(CU.ytUrl||'')}" placeholder="https://youtube.com/watch?v=..."></div>
+      <button class="btn btn-ghost btn-sm" style="margin-bottom:10px;" onclick="prevYt()">Vista previa</button>
+      <div id="em-yt-prev" style="margin-bottom:14px;"></div>
+      <button class="btn btn-red btn-full" onclick="saveEdit('clip')">Guardar</button>`;
+  }
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function prevYt(){
+  const url=document.getElementById('em-yt')?.value;
+  const vid=url?getYtId(url):null;
+  document.getElementById('em-yt-prev').innerHTML=vid
+    ?`<div class="yt-wrap"><iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen loading="lazy"></iframe></div>`
+    :`<div style="color:var(--red);font-family:'Share Tech Mono',monospace;font-size:11px;">Link inválido.</div>`;
+}
+
+async function saveEdit(type){
+  if(type==='bio'){ CU.bio=document.getElementById('em-bio').value.trim(); CU.agent=document.getElementById('em-agent').value; }
+  else if(type==='game'){
+    const riot=document.getElementById('em-riot').value.trim();
+    if(!riot.includes('#')){ alert('Riot ID inválido: necesita #TAG'); return; }
+    CU.riotId=riot; CU.rank=document.getElementById('em-rank').value;
+    CU.role=document.getElementById('em-role').value; CU.country=document.getElementById('em-country').value;
+    CU.gender=document.getElementById('em-gender').value;
+  } else if(type==='clip'){ CU.ytUrl=document.getElementById('em-yt').value.trim(); }
+  if(fbReady){ const {db,doc,updateDoc}=window._fb; const {id,...rest}=CU; await updateDoc(doc(db,'users',CU.id),rest); }
+  else updateLocalUser(CU);
+  closeModal(); renderProfile();
+}
+
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ══════════════════════════════
+// FILTERS
+// ══════════════════════════════
+function openFilters(){ document.getElementById('filter-overlay').classList.add('open'); }
+function closeFilters(){ document.getElementById('filter-overlay').classList.remove('open'); }
+
+function toggleChip(el, group){
+  el.classList.toggle('sel');
+  const val=el.dataset.val;
+  const arr=activeFilters[group];
+  if(!arr) return;
+  const idx=arr.indexOf(val);
+  if(idx>=0) arr.splice(idx,1); else arr.push(val);
+}
+function toggleGroup(el, group, prefix){
+  el.classList.toggle('sel');
+  const RANKS_IN_GROUP = RANKS.filter(r=>r.startsWith(prefix)).map(r=>r);
+  const selected=el.classList.contains('sel');
+  RANKS_IN_GROUP.forEach(r=>{
+    const i=activeFilters.rank.indexOf(r);
+    if(selected&&i<0) activeFilters.rank.push(r);
+    else if(!selected&&i>=0) activeFilters.rank.splice(i,1);
+  });
+  // also add the prefix itself for "Radiante" edge case
+  if(prefix==='Radiante'){
+    const i=activeFilters.rank.indexOf('Radiante');
+    if(selected&&i<0) activeFilters.rank.push('Radiante');
+  }
+}
+function toggleChipSingle(el, key){
+  el.classList.toggle('sel');
+  activeFilters[key]=el.classList.contains('sel');
+}
+
+function clearFilters(){
+  activeFilters={gender:[],rank:[],role:[],country:[],hasYt:false};
+  document.querySelectorAll('.chip.sel,.chip.sel-green').forEach(c=>c.classList.remove('sel','sel-green'));
+}
+
+function applyFilters(){
+  closeFilters();
+  updateFilterBadge();
+  buildSwipeQueue();
+}
+
+function updateFilterBadge(){
+  const total=activeFilters.gender.length+activeFilters.rank.length+activeFilters.role.length+activeFilters.country.length+(activeFilters.hasYt?1:0);
+  const badge=document.getElementById('filter-count-badge');
+  if(badge){ badge.textContent=total; badge.style.display=total>0?'':'none'; }
+  // active chips line
+  const wrap=document.getElementById('fac-wrap');
+  if(!wrap) return;
+  const all=[...activeFilters.gender,...activeFilters.role,...activeFilters.country];
+  // rank groups
+  const rankGroups=new Set();
+  activeFilters.rank.forEach(r=>rankGroups.add(r.split(' ')[0]));
+  const rankLabels=[...rankGroups];
+  const allLabels=[...all,...rankLabels,...(activeFilters.hasYt?['Con clip 🎬']:[])];
+  wrap.innerHTML=allLabels.map(l=>`<div class="fac">${l} <span onclick="removeFac('${l}')">✕</span></div>`).join('');
+}
+
+function removeFac(val){
+  // simple: just clear all and rebuild
+  clearFilters(); updateFilterBadge(); buildSwipeQueue();
+}
+
+// ══════════════════════════════
+// MATCH POPUP
+// ══════════════════════════════
+function showMatchPopup(profile){
+  const avs=document.getElementById('match-avs');
+  avs.innerHTML=`
+    <div class="match-av">${CU.avatar?`<img src="${CU.avatar}">`:'🎮'}</div>
+    <div class="match-heart">💚</div>
+    <div class="match-av">${profile.avatar?`<img src="${profile.avatar}">`:'🎮'}</div>
+  `;
+  document.getElementById('match-sub').textContent=`¡Vos y ${profile.username} se gustaron! Ya pueden coordinar duo.`;
+  document.getElementById('match-overlay').classList.add('open');
+}
+function closeMatch(){ document.getElementById('match-overlay').classList.remove('open'); }
+
+function showFirebaseGuide(){ document.getElementById('fb-guide-overlay').classList.add('open'); }
+
+// ══════════════════════════════
+// AVATAR
+// ══════════════════════════════
+function handleAv(input, prevId, dataId){
+  const file=input.files[0]; if(!file) return;
+  if(file.size>2*1024*1024){ alert('Imagen muy grande. Máx 2MB.'); return; }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const data=e.target.result;
+    document.getElementById(dataId).value=data;
+    const prev=document.getElementById(prevId);
+    if(prevId.includes('prev')||prevId==='r-av-prev'){
+      prev.innerHTML=`<img src="${data}">`;
+    } else {
+      prev.innerHTML=`<img src="${data}">`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ══════════════════════════════
+// HELPERS
+// ══════════════════════════════
+function v(id){ return document.getElementById(id)?.value||''; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function setTxt(id,val){ const el=document.getElementById(id); if(el)el.textContent=val; }
+function showErr(el,msg){ el.textContent=msg; el.style.display='block'; }
+function getYtId(url){ if(!url)return null; const m=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/); return m?m[1]:null; }
+function timeAgo(ts){ const m=Math.floor((Date.now()-ts)/60000); if(m<1)return 'ahora mismo'; if(m<60)return `hace ${m}m`; const h=Math.floor(m/60); if(h<24)return `hace ${h}h`; return `hace ${Math.floor(h/24)}d`; }
+
+// keyboard shortcuts on swipe page
+document.addEventListener('keydown', e=>{
+  if(!CU||!document.getElementById('page-swipe').classList.contains('active')) return;
+  if(e.key==='ArrowRight') swipe('right');
+  if(e.key==='ArrowLeft') swipe('left');
+  if(e.key==='ArrowUp') swipe('super');
+});
+</script>
+</body>
+</html>
